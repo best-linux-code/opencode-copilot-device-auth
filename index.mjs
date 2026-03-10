@@ -81,6 +81,61 @@ export async function CopilotAuthPlugin() {
     if (!provider?.models) return;
 
     const liveById = new Map(liveModels.map((model) => [model.id, model]));
+    const opus4_6 = provider.models["claude-opus-4.6"];
+    const opus4_6_1m = liveById.get("claude-opus-4.6-1m");
+
+    if (opus4_6 && opus4_6_1m && !provider.models["claude-opus-4.6-1m"]) {
+      const limits = opus4_6_1m.capabilities?.limits ?? {};
+      const supports = opus4_6_1m.capabilities?.supports ?? {};
+      const vision = !!supports.vision || !!limits.vision;
+
+      provider.models["claude-opus-4.6-1m"] = {
+        ...structuredClone(opus4_6),
+        id: "claude-opus-4.6-1m",
+        api: {
+          ...opus4_6.api,
+          id: "claude-opus-4.6-1m",
+        },
+        name: "Claude Opus 4.6 (1M context)",
+        family: opus4_6_1m.capabilities?.family ?? opus4_6.family,
+        cost: {
+          input: 0,
+          output: 0,
+          cache: {
+            read: 0,
+            write: 0,
+          },
+        },
+        limit: {
+          context:
+            limits.max_context_window_tokens
+            ?? opus4_6.limit.context,
+          input:
+            limits.max_prompt_tokens
+            ?? opus4_6.limit.input
+            ?? limits.max_context_window_tokens,
+          output:
+            limits.max_output_tokens
+            ?? limits.max_non_streaming_output_tokens
+            ?? opus4_6.limit.output,
+        },
+        capabilities: {
+          ...structuredClone(opus4_6.capabilities),
+          reasoning:
+            opus4_6.capabilities.reasoning
+            || !!supports.adaptive_thinking
+            || typeof supports.max_thinking_budget === "number"
+            || Array.isArray(supports.reasoning_effort),
+          attachment: opus4_6.capabilities.attachment || vision,
+          toolcall:
+            opus4_6.capabilities.toolcall || !!supports.tool_calls,
+          input: {
+            ...structuredClone(opus4_6.capabilities.input),
+            image: opus4_6.capabilities.input.image || vision,
+          },
+        },
+      };
+    }
 
     for (const model of Object.values(provider.models)) {
       model.cost = {
