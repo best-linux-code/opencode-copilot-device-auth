@@ -1,7 +1,10 @@
 {
-  "name": "opencode-copilot-auth",
-  "version": "0.0.11",
+  "name": "@zhzy0077/opencode-copilot-cli-auth",
+  "version": "0.0.13",
   "main": "./index.mjs",
+  "publishConfig": {
+    "access": "public"
+  },
   "devDependencies": {
     "@opencode-ai/plugin": "^0.4.45"
   },
