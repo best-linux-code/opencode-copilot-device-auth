@@ -478,7 +478,68 @@ export async function CopilotAuthPlugin({ client }) {
                 log(`fetch ← ${resp.status} ${resp.statusText} model=${bodyModel} ${url.replace(/\/\/[^/]+/, "//***")} body=${errBody.slice(0, 300)}`);
               } catch (_) {}
             } else {
-              log(`fetch ← ${resp.status} model=${bodyModel} ${url.replace(/\/\/[^/]+/, "//***")}`);
+              // Log model usage from non-streaming responses
+              const contentType = resp.headers.get("content-type") || "";
+              if (contentType.includes("application/json") && !contentType.includes("stream")) {
+                try {
+                  const cloned = resp.clone();
+                  const data = await cloned.json();
+                  const u = data.usage;
+                  if (u) {
+                    log(`usage model=${data.model || bodyModel} prompt=${u.prompt_tokens} completion=${u.completion_tokens} total=${u.total_tokens}`);
+                  } else {
+                    log(`fetch ← ${resp.status} model=${bodyModel} ${url.replace(/\/\/[^/]+/, "//***")}`);
+                  }
+                } catch (_) {
+                  log(`fetch ← ${resp.status} model=${bodyModel} ${url.replace(/\/\/[^/]+/, "//***")}`);
+                }
+              } else if (contentType.includes("text/event-stream")) {
+                // Streaming response: wrap body to capture final usage chunk
+                const origBody = resp.body;
+                const { readable, writable } = new TransformStream({
+                  transform(chunk, controller) {
+                    controller.enqueue(chunk);
+                  },
+                  flush() {}
+                });
+                const reader = origBody.getReader();
+                const writer = writable.getWriter();
+                const decoder = new TextDecoder();
+                let usageLogged = false;
+                (async () => {
+                  try {
+                    while (true) {
+                      const { done, value } = await reader.read();
+                      if (done) { await writer.close(); break; }
+                      await writer.write(value);
+                      const text = decoder.decode(value, { stream: true });
+                      if (!usageLogged && text.includes('"usage"')) {
+                        const lines = text.split('\n');
+                        for (const line of lines) {
+                          if (!line.startsWith('data: ')) continue;
+                          const payload = line.slice(6).trim();
+                          if (payload === '[DONE]') continue;
+                          try {
+                            const parsed = JSON.parse(payload);
+                            if (parsed.usage) {
+                              const u = parsed.usage;
+                              log(`usage model=${parsed.model || bodyModel} prompt=${u.prompt_tokens} completion=${u.completion_tokens} total=${u.total_tokens}`);
+                              usageLogged = true;
+                            }
+                          } catch (_) {}
+                        }
+                      }
+                    }
+                  } catch (e) { try { await writer.abort(e); } catch(_){} }
+                })();
+                return new Response(readable, {
+                  status: resp.status,
+                  statusText: resp.statusText,
+                  headers: resp.headers,
+                });
+              } else {
+                log(`fetch ← ${resp.status} model=${bodyModel} ${url.replace(/\/\/[^/]+/, "//***")}`);
+              }
             }
             return resp;
           },
