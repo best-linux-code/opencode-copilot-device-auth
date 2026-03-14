@@ -412,6 +412,7 @@ export async function CopilotAuthPlugin({ client }) {
             // Detect conversation metadata for headers
             let isAgentCall = false;
             let isVisionRequest = false;
+            let bodyModel = "unknown";
             try {
               const body =
                 typeof init.body === "string"
@@ -443,6 +444,8 @@ export async function CopilotAuthPlugin({ client }) {
                   Array.isArray(lastInput?.content) &&
                   lastInput.content.some((part) => part.type === "input_image");
               }
+
+              bodyModel = body?.model ?? "unknown";
             } catch (e) {
               log(`Body parse error: ${e.message}`);
             }
@@ -462,7 +465,6 @@ export async function CopilotAuthPlugin({ client }) {
             delete headers["authorization"];
 
             const url = typeof input === "string" ? input : input?.url ?? String(input);
-            const bodyModel = parsedBody?.model ?? "unknown";
             log(`fetch → ${url.replace(/\/\/[^/]+/, "//***")} model=${bodyModel}`);
 
             const resp = await fetch(input, {
