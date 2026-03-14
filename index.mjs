@@ -482,7 +482,7 @@ export async function CopilotAuthPlugin({ client }) {
               const cloned = resp.clone();
               try {
                 const errBody = await cloned.text();
-                log(`fetch ← ${resp.status} ${resp.statusText} model=${bodyModel} ${url.replace(/\/\/[^/]+/, "//***")} body=${errBody.slice(0, 300)}`);
+                log(`fetch ← ${resp.status} ${resp.statusText} session=${sid} model=${bodyModel} ${url.replace(/\/\/[^/]+/, "//***")} body=${errBody.slice(0, 300)}`);
               } catch (_) {}
             } else {
               // Log model usage from non-streaming responses
@@ -498,10 +498,10 @@ export async function CopilotAuthPlugin({ client }) {
                     const rate = lim ? ` usage_rate=${Math.round((u.total_tokens / lim.context) * 100)}%` : "";
                     log(`usage session=${sid} model=${data.model || bodyModel} total=${u.total_tokens} input=${u.prompt_tokens} output=${u.completion_tokens} cache_read=${cd.cached_tokens ?? 0} cache_write=${u.prompt_tokens - (cd.cached_tokens ?? 0)}${rate}`);
                   } else {
-                    log(`fetch ← ${resp.status} model=${bodyModel} ${url.replace(/\/\/[^/]+/, "//***")}`);
+                    log(`fetch ← ${resp.status} session=${sid} model=${bodyModel} ${url.replace(/\/\/[^/]+/, "//***")}`);
                   }
                 } catch (_) {
-                  log(`fetch ← ${resp.status} model=${bodyModel} ${url.replace(/\/\/[^/]+/, "//***")}`);
+                  log(`fetch ← ${resp.status} session=${sid} model=${bodyModel} ${url.replace(/\/\/[^/]+/, "//***")}`);
                 }
               } else if (contentType.includes("text/event-stream")) {
                 // Streaming response: wrap body to capture final usage chunk
@@ -551,7 +551,7 @@ export async function CopilotAuthPlugin({ client }) {
                   headers: resp.headers,
                 });
               } else {
-                log(`fetch ← ${resp.status} model=${bodyModel} ${url.replace(/\/\/[^/]+/, "//***")}`);
+                log(`fetch ← ${resp.status} session=${sid} model=${bodyModel} ${url.replace(/\/\/[^/]+/, "//***")}`);
               }
             }
             return resp;
