@@ -43,6 +43,7 @@ export async function CopilotAuthPlugin({ client }) {
       fs.appendFileSync(LOG_FILE, `[${new Date().toISOString()}] ${msg}\n`);
     } catch {}
   };
+  const MODEL_LIMITS = new Map(); // model_id -> { input, context, output }
 
   // ── Cleanup stale config when no auth ──
   // Must run at plugin init (top-level), NOT inside loader,
@@ -215,6 +216,7 @@ export async function CopilotAuthPlugin({ client }) {
       // input must use max_prompt_tokens (server-enforced), NOT max_context_window_tokens
       // fallback: context - output (safe estimate when max_prompt_tokens is missing)
       model.limit.input = limits.max_prompt_tokens ?? model.limit.input ?? (model.limit.context - model.limit.output);
+      MODEL_LIMITS.set(model.id, { input: model.limit.input, context: model.limit.context, output: model.limit.output });
 
       model.capabilities.reasoning =
         model.capabilities.reasoning ||
@@ -450,6 +452,11 @@ export async function CopilotAuthPlugin({ client }) {
               log(`Body parse error: ${e.message}`);
             }
 
+            // Extract session ID from OpenCode headers
+            const hdrs = init?.headers || {};
+            const sessionId = hdrs["x-opencode-session"] || hdrs["X-Opencode-Session"] || "";
+            const sid = sessionId ? sessionId.slice(0, 16) : "none";
+
             const headers = {
               ...init.headers,
               ...HEADERS,
@@ -487,7 +494,9 @@ export async function CopilotAuthPlugin({ client }) {
                   const u = data.usage;
                   if (u) {
                     const cd = u.prompt_tokens_details || {};
-                    log(`usage model=${data.model || bodyModel} total=${u.total_tokens} input=${u.prompt_tokens} output=${u.completion_tokens} cache_read=${cd.cached_tokens ?? 0} cache_write=${u.prompt_tokens - (cd.cached_tokens ?? 0)}`);
+                    const lim = MODEL_LIMITS.get(data.model || bodyModel);
+                    const rate = lim ? ` usage_rate=${((u.prompt_tokens / lim.input) * 100).toFixed(1)}%` : "";
+                    log(`usage session=${sid} model=${data.model || bodyModel} total=${u.total_tokens} input=${u.prompt_tokens} output=${u.completion_tokens} cache_read=${cd.cached_tokens ?? 0} cache_write=${u.prompt_tokens - (cd.cached_tokens ?? 0)}${rate}`);
                   } else {
                     log(`fetch ← ${resp.status} model=${bodyModel} ${url.replace(/\/\/[^/]+/, "//***")}`);
                   }
@@ -525,7 +534,9 @@ export async function CopilotAuthPlugin({ client }) {
                             if (parsed.usage) {
                               const u = parsed.usage;
                               const cd = u.prompt_tokens_details || {};
-                              log(`usage model=${parsed.model || bodyModel} total=${u.total_tokens} input=${u.prompt_tokens} output=${u.completion_tokens} cache_read=${cd.cached_tokens ?? 0} cache_write=${u.prompt_tokens - (cd.cached_tokens ?? 0)}`);
+                              const lim = MODEL_LIMITS.get(parsed.model || bodyModel);
+                              const rate = lim ? ` usage_rate=${((u.prompt_tokens / lim.input) * 100).toFixed(1)}%` : "";
+                              log(`usage session=${sid} model=${parsed.model || bodyModel} total=${u.total_tokens} input=${u.prompt_tokens} output=${u.completion_tokens} cache_read=${cd.cached_tokens ?? 0} cache_write=${u.prompt_tokens - (cd.cached_tokens ?? 0)}${rate}`);
                               usageLogged = true;
                             }
                           } catch (_) {}
