@@ -731,6 +731,12 @@ export async function CopilotAuthPlugin({ client }) {
         },
       ],
     },
+    "chat.headers": async (input, output) => {
+      if (input.model.providerID !== "github-copilot") return;
+      if (input.sessionID) {
+        output.headers["x-opencode-session"] = input.sessionID;
+      }
+    },
     "chat.params": async (input, output) => {
       if (input.model.providerID !== "github-copilot") return;
       if (input.model.api?.npm !== "@ai-sdk/github-copilot") return;
