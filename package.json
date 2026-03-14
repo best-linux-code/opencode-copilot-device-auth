@@ -1,6 +1,6 @@
 {
   "name": "@best-linux-code/opencode-copilot-device-auth",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "main": "./index.mjs",
   "publishConfig": {
     "access": "public"
